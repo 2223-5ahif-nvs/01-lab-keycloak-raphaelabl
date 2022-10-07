@@ -1,0 +1,36 @@
+name: cd
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+          config: |
+            Host server
+              HostName ${{ secrets.SSH_HOST }}
+              User ${{ secrets.SSH_USER }}
+      - name: deploy to server
+        run: |
+          ls -al
+          ssh server "[[ -d ~/keycloak ]] || mkdir ~/keycloak"
+          ssh server "sudo rm -rf ~/keycloak/docker-compose.yml"
+          scp docker-compose.yml server:~/keycloak
+          ssh server "cd ~/keycloak && echo ${{ secrets.REGISTRY_ACCESS_TOKEN }} | sudo docker login ghcr.io -u raphaelabl --password-stdin && sudo docker compose pull"
+          ssh server "cd ~/keycloak && sudo docker compose down && sudo docker compose up -d"
